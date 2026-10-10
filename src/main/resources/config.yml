@@ -1,4 +1,4 @@
-# KingFeatures v0.1.0
+# KingFeatures v0.1.1
 # One plugin, modular features. Ultimate Economy Plus remains the money/shop/crate authority.
 
 bottle:
@@ -25,15 +25,24 @@ resource-pack:
   send-delay-ticks: 20
   prompt: "&dSkyStrike visuals &7- ranks, icons and KingFeatures assets"
   mode: AUTO
+
+  # Preferred: if ResourcePackManager is installed, KingFeatures registers its pack there.
+  # RSPM merges/hosts the pack and can fall back to remote hosting when the server's HTTP port is unreachable.
+  resourcepackmanager:
+    enabled: true
+    reload-after-register: true
+
+  # Direct remote fallback if ResourcePackManager is not installed.
   remote-url: ""
+  remote-sha1: ""
+
+  # Local pack discovery order.
   local-file: "resourcepack/KingFeatures-Pack.zip"
   auto-import-omnipanel-rank-pack: true
   omnipanel-rank-pack-path: "plugins/OmniPanel/rank-pack/Kingez341YT-Rank-Pack-1.21.11.zip"
-  self-host:
-    enabled: true
-    bind-address: "0.0.0.0"
-    port: 8124
-    public-host: ""
+
+  # The old built-in port-8124 self-host path was removed in v0.1.1 because managed hosts
+  # commonly block arbitrary ports. Use ResourcePackManager or remote-url instead.
 
 omnipanel:
   enabled: true
