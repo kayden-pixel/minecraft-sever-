@@ -38,6 +38,12 @@ public final class KingFeaturesCommand implements CommandExecutor, TabCompleter 
                 plugin.getTrollLab().openTargets(player);
                 return true;
             }
+            case "ranks", "rankvisuals", "rank-visuals" -> {
+                if (!(sender instanceof Player player)) return fail(sender, "Players only.");
+                if (!plugin.isRankVisualsAvailable()) return fail(sender, "Rank visual module failed to start. Run /kf status.");
+                plugin.getRankVisuals().open(player);
+                return true;
+            }
             case "bottle" -> { return bottle(sender, args); }
             case "pack" -> { return pack(sender, args); }
             case "status", "diag", "diagnostics" -> {
@@ -47,6 +53,7 @@ public final class KingFeaturesCommand implements CommandExecutor, TabCompleter 
                 sender.sendMessage(Text.color("&7Bottles: &f" + (plugin.isBottleAvailable() ? "ready" : "unavailable")));
                 sender.sendMessage(Text.color("&7Troll Lab: &f" + plugin.trollStatus()));
                 sender.sendMessage(Text.color("&7OmniPanel: &f" + plugin.omniPanelStatus()));
+                sender.sendMessage(Text.color("&7Rank visuals: &f" + plugin.rankVisualStatus()));
                 sender.sendMessage(Text.color("&7Pack: &f" + plugin.packStatus()));
                 if (!plugin.moduleFailures().isEmpty()) {
                     sender.sendMessage(Text.color("&cStartup failures:"));
@@ -129,6 +136,7 @@ public final class KingFeaturesCommand implements CommandExecutor, TabCompleter 
 
     private void help(CommandSender sender) {
         sender.sendMessage(Text.color("&d&lKingFeatures &8• &fSMP Feature Hub"));
+        sender.sendMessage(Text.color("&d/kf ranks &7- OmniPanel rank badge settings/view"));
         sender.sendMessage(Text.color("&d/kf troll &7- open Troll Lab"));
         sender.sendMessage(Text.color("&d/kf bottle buy &7- buy King's Favor (&6255&7)"));
         sender.sendMessage(Text.color("&d/kf status &7- integration/startup diagnostics"));
@@ -148,7 +156,7 @@ public final class KingFeaturesCommand implements CommandExecutor, TabCompleter 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         List<String> values = new ArrayList<>();
-        if (args.length == 1) values.addAll(List.of("troll", "bottle", "pack", "status", "reload"));
+        if (args.length == 1) values.addAll(List.of("ranks", "troll", "bottle", "pack", "status", "reload"));
         else if (args.length == 2 && args[0].equalsIgnoreCase("bottle")) values.addAll(List.of("buy", "template", "give"));
         else if (args.length == 2 && args[0].equalsIgnoreCase("pack")) values.addAll(List.of("status", "resend"));
         else if (args.length == 3 && args[0].equalsIgnoreCase("bottle") && args[1].equalsIgnoreCase("give")) {
