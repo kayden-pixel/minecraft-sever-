@@ -2,6 +2,8 @@ name: build
 
 on:
   push:
+    branches-ignore:
+      - pack-host
   pull_request:
 
 jobs:
@@ -46,7 +48,7 @@ jobs:
           path: build/libs/KingFeatures-*.jar
 
   runtime-smoke-26-2:
-    name: Runtime Paper 26.2 build 129
+    name: Runtime Paper 26.2 build 129 — zero-setup pack
     needs: compatibility
     runs-on: ubuntu-latest
     steps:
@@ -62,21 +64,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p smoke/plugins/OmniPanel/rank-pack
+          mkdir -p smoke/plugins
           JAR_PATH=$(find artifact -maxdepth 2 -type f -name 'KingFeatures-*.jar' | head -1)
           test -n "$JAR_PATH"
-          cp "$JAR_PATH" smoke/plugins/KingFeatures-0.1.2.jar
+          cp "$JAR_PATH" smoke/plugins/KingFeatures-0.1.3.jar
 
-          printf 'pack-smoke-test' > smoke/plugins/OmniPanel/rank-pack/pack.txt
-          (cd smoke/plugins/OmniPanel/rank-pack && zip -q Kingez341YT-Rank-Pack-1.21.11.zip pack.txt && rm pack.txt)
-
-          USER_AGENT='KingFeatures-CI/0.1.2 (https://github.com/kayden-pixel/minecraft-sever-)'
+          USER_AGENT='KingFeatures-CI/0.1.3 (https://github.com/kayden-pixel/minecraft-sever-)'
           BUILDS=$(curl -fsSL -H "User-Agent: $USER_AGENT" 'https://fill.papermc.io/v3/projects/paper/versions/26.2/builds')
           PAPER_URL=$(printf '%s' "$BUILDS" | jq -r 'first(.[] | select(.id == 129) | .downloads["server:default"].url) // empty')
           test -n "$PAPER_URL"
           curl -fsSL -H "User-Agent: $USER_AGENT" "$PAPER_URL" -o smoke/paper-26.2-129.jar
           echo 'eula=true' > smoke/eula.txt
-      - name: Boot Paper and verify KingFeatures stays enabled
+      - name: Boot Paper and verify zero-setup embedded pack
         shell: bash
         run: |
           set -euo pipefail
@@ -110,8 +109,11 @@ jobs:
           fi
 
           cat server.log
-          grep -q 'KingFeatures v0.1.2 enabled' server.log
-          grep -q 'Auto-detected OmniPanel rank pack:' server.log
-          if grep -q 'Could not inspect local resource pack' server.log; then exit 1; fi
+          grep -q 'KingFeatures v0.1.3 enabled' server.log
+          grep -q 'KingFeatures embedded rank pack ready:' server.log
+          grep -q 'direct-builtin-host:' server.log
+          test -f plugins/KingFeatures/resourcepack/KingFeatures-Rank-Pack.zip
+          test "$(sha1sum plugins/KingFeatures/resourcepack/KingFeatures-Rank-Pack.zip | awk '{print $1}')" = '6afdaefa9da8fb98c38b481e125c6b9ebce9bf1c'
+          unzip -t plugins/KingFeatures/resourcepack/KingFeatures-Rank-Pack.zip
           if grep -q 'Error occurred while enabling KingFeatures' server.log; then exit 1; fi
           if grep -q 'Disabling KingFeatures' server.log; then exit 1; fi
