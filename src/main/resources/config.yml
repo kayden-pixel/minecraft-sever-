@@ -1,0 +1,49 @@
+# KingFeatures v0.1.0
+# One plugin, modular features. Ultimate Economy Plus remains the money/shop/crate authority.
+
+bottle:
+  enabled: true
+  id: kings_favor
+  display-name: "&6&lKing's Favor Bottle"
+  price: 255.0
+  redeem-window-hours: 5
+  hero-of-the-village-hours: 24
+  amplifier: 0
+  custom-model-data: 341255
+  lore:
+    - "&7A sealed royal favor from the King."
+    - "&eCost: &6255"
+    - "&eRedeem within: &f5 hours"
+    - "&eEffect: &fHero of the Village"
+    - "&eDuration: &f1 day"
+    - ""
+    - "&8Signed by KingFeatures"
+
+resource-pack:
+  enabled: true
+  required: true
+  send-delay-ticks: 20
+  prompt: "&dSkyStrike visuals &7- ranks, icons and KingFeatures assets"
+  mode: AUTO
+  remote-url: ""
+  local-file: "resourcepack/KingFeatures-Pack.zip"
+  auto-import-omnipanel-rank-pack: true
+  omnipanel-rank-pack-path: "plugins/OmniPanel/rank-pack/Kingez341YT-Rank-Pack-1.21.11.zip"
+  self-host:
+    enabled: true
+    bind-address: "0.0.0.0"
+    port: 8124
+    public-host: ""
+
+omnipanel:
+  enabled: true
+  button-slot: 45
+  button-priority: 110
+  reconnect-seconds: 10
+
+troll-lab:
+  enabled: true
+  animation-period-ticks: 6
+  action-cooldown-seconds: 2
+  audit-to-console: true
+  allow-self-target: true

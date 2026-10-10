@@ -1,0 +1,41 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  compatibility:
+    name: Paper ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: '1.21.11'
+            paper: '1.21.11-R0.1-SNAPSHOT'
+            java: '21'
+            release: '21'
+            upload: true
+          - label: '26.3'
+            paper: '26.3.build.+'
+            java: '25'
+            release: '25'
+            upload: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.1.0'
+      - name: Build against Paper ${{ matrix.label }}
+        run: gradle clean build --stacktrace -PpaperVersion='${{ matrix.paper }}' -PtoolchainVersion='${{ matrix.java }}' -PtargetRelease='${{ matrix.release }}'
+      - name: Upload deployable plugin JAR
+        if: matrix.upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: KingFeatures-${{ github.sha }}
+          path: build/libs/KingFeatures-*.jar

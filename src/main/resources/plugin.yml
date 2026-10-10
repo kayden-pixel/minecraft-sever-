@@ -1,0 +1,25 @@
+name: KingFeatures
+version: '${version}'
+main: yt.kingez341.kingfeatures.KingFeaturesPlugin
+api-version: '1.21'
+authors: [KingEZ341YT]
+description: Modular SkyStrike SMP feature hub with Troll Lab, resource-pack delivery and Ultimate Economy Plus integration.
+softdepend: [OmniPanel, UltimateEconomyPlus]
+commands:
+  kingfeatures:
+    aliases: [kf, kingf]
+    description: KingFeatures control command
+    usage: /kingfeatures <troll|bottle|pack|status|reload>
+permissions:
+  kingfeatures.admin:
+    default: op
+    description: Full KingFeatures administration
+  kingfeatures.trolllab:
+    default: op
+    description: Open and use Troll Lab
+  kingfeatures.bottle.buy:
+    default: true
+    description: Buy King's Favor bottles with Ultimate Economy Plus
+  kingfeatures.bottle.give:
+    default: op
+    description: Give signed KingFeatures bottles
