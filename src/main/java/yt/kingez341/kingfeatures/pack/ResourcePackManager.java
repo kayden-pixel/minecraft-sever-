@@ -153,9 +153,9 @@ public final class ResourcePackManager implements Listener {
             Class<?> api = Class.forName("com.magmaguy.resourcepackmanager.api.ResourcePackManagerAPI", true, loader);
 
             if (localPack != null && Files.isRegularFile(localPack)) {
-                Path pluginsDir = plugin.getDataFolder().toPath().getParent().toAbsolutePath().normalize();
+                Path pluginsDir = plugin.getDataFolder().toPath().toAbsolutePath().normalize().getParent();
                 Path pack = localPack.toAbsolutePath().normalize();
-                if (!pack.startsWith(pluginsDir)) {
+                if (pluginsDir == null || !pack.startsWith(pluginsDir)) {
                     status = "rspm-local-pack-outside-plugins:" + pack;
                     plugin.getLogger().warning("ResourcePackManager requires a path under plugins/. Pack is outside that directory: " + pack);
                     return false;
@@ -218,18 +218,23 @@ public final class ResourcePackManager implements Listener {
     }
 
     private Path discoverPack() {
-        Path configured = plugin.getDataFolder().toPath()
+        Path dataFolder = plugin.getDataFolder().toPath().toAbsolutePath().normalize();
+        Path configured = dataFolder
                 .resolve(plugin.getConfig().getString("resource-pack.local-file", "resourcepack/KingFeatures-Pack.zip"))
                 .normalize();
         if (Files.isRegularFile(configured)) return configured;
 
         if (plugin.getConfig().getBoolean("resource-pack.auto-import-omnipanel-rank-pack", true)) {
-            Path serverRoot = plugin.getDataFolder().toPath().getParent().getParent();
+            Path pluginsDir = dataFolder.getParent();
+            Path serverRoot = pluginsDir == null ? null : pluginsDir.getParent();
+            if (serverRoot == null) {
+                serverRoot = Path.of(".").toAbsolutePath().normalize();
+            }
             String relative = plugin.getConfig().getString(
                     "resource-pack.omnipanel-rank-pack-path",
                     "plugins/OmniPanel/rank-pack/Kingez341YT-Rank-Pack-1.21.11.zip"
             );
-            Path omni = serverRoot.resolve(relative).normalize();
+            Path omni = serverRoot.resolve(relative).toAbsolutePath().normalize();
             if (Files.isRegularFile(omni)) {
                 plugin.getLogger().info("Auto-detected OmniPanel rank pack: " + omni);
                 return omni;
