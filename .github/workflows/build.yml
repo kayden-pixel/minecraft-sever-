@@ -62,10 +62,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p smoke/plugins
+          mkdir -p smoke/plugins/OmniPanel/rank-pack
           JAR_PATH=$(find artifact -maxdepth 2 -type f -name 'KingFeatures-*.jar' | head -1)
           test -n "$JAR_PATH"
           cp "$JAR_PATH" smoke/plugins/KingFeatures-0.1.1.jar
+
+          # Create a tiny stand-in at the exact OmniPanel rank-pack path. This verifies
+          # KingFeatures resolves Paper's relative plugins/ data path correctly at runtime.
+          printf 'pack-smoke-test' > smoke/plugins/OmniPanel/rank-pack/pack.txt
+          (cd smoke/plugins/OmniPanel/rank-pack && zip -q Kingez341YT-Rank-Pack-1.21.11.zip pack.txt && rm pack.txt)
 
           USER_AGENT='KingFeatures-CI/0.1.1 (https://github.com/kayden-pixel/minecraft-sever-)'
           BUILDS=$(curl -fsSL -H "User-Agent: $USER_AGENT" 'https://fill.papermc.io/v3/projects/paper/versions/26.2/builds')
@@ -108,5 +113,7 @@ jobs:
 
           cat server.log
           grep -q 'KingFeatures v0.1.1 enabled' server.log
+          grep -q 'Auto-detected OmniPanel rank pack:' server.log
+          if grep -q 'Could not inspect local resource pack' server.log; then exit 1; fi
           if grep -q 'Error occurred while enabling KingFeatures' server.log; then exit 1; fi
           if grep -q 'Disabling KingFeatures' server.log; then exit 1; fi
