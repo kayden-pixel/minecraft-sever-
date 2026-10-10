@@ -23,7 +23,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat src/main/resources/embedded/KingFeatures-Rank-Pack.part{00..05} | base64 --decode > /tmp/KingFeatures-Rank-Pack.zip
+          cat \
+            src/main/resources/embedded/KingFeatures-Rank-Pack.part00 \
+            src/main/resources/embedded/KingFeatures-Rank-Pack.part01 \
+            src/main/resources/embedded/KingFeatures-Rank-Pack.part02 \
+            src/main/resources/embedded/KingFeatures-Rank-Pack.part03 \
+            src/main/resources/embedded/KingFeatures-Rank-Pack.part04a \
+            src/main/resources/embedded/KingFeatures-Rank-Pack.part04b \
+            src/main/resources/embedded/KingFeatures-Rank-Pack.part05 \
+            | base64 --decode > /tmp/KingFeatures-Rank-Pack.zip
           test "$(sha1sum /tmp/KingFeatures-Rank-Pack.zip | awk '{print $1}')" = '6afdaefa9da8fb98c38b481e125c6b9ebce9bf1c'
           unzip -t /tmp/KingFeatures-Rank-Pack.zip
 
@@ -48,3 +56,21 @@ jobs:
           git commit -m 'Publish KingFeatures rank pack'
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push --force origin pack-host
+
+      - name: Verify public client download URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/pack-host/KingFeatures-Rank-Pack.zip?revision=${GITHUB_SHA}"
+          OK=0
+          for i in $(seq 1 20); do
+            if curl -fsSL -H 'User-Agent: KingFeatures-Pack-Verification/0.1.3' "$URL" -o /tmp/hosted-pack.zip; then
+              if [ "$(sha1sum /tmp/hosted-pack.zip | awk '{print $1}')" = '6afdaefa9da8fb98c38b481e125c6b9ebce9bf1c' ]; then
+                OK=1
+                break
+              fi
+            fi
+            sleep 3
+          done
+          test "$OK" -eq 1
+          unzip -t /tmp/hosted-pack.zip
