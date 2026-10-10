@@ -4,7 +4,7 @@ main: yt.kingez341.kingfeatures.KingFeaturesPlugin
 api-version: '1.21'
 authors: [KingEZ341YT]
 description: Modular SkyStrike SMP feature hub with Troll Lab, resource-pack delivery and Ultimate Economy Plus integration.
-softdepend: [OmniPanel, UltimateEconomyPlus]
+softdepend: [OmniPanel, UltimateEconomyPlus, ResourcePackManager]
 commands:
   kingfeatures:
     aliases: [kf, kingf]
