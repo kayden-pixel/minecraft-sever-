@@ -5,21 +5,25 @@ plugins {
 group = "yt.kingez341"
 version = "0.1.0"
 
+val paperVersion = providers.gradleProperty("paperVersion").orElse("1.21.11-R0.1-SNAPSHOT")
+val toolchainVersion = providers.gradleProperty("toolchainVersion").map(String::toInt).orElse(21)
+
 repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
+    compileOnly("io.papermc.paper:paper-api:${paperVersion.get()}")
 }
 
 java {
-    toolchain.languageVersion.set(JavaLanguageVersion.of(21))
+    toolchain.languageVersion.set(JavaLanguageVersion.of(toolchainVersion.get()))
 }
 
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
+    // Keep one deployable Java 21 bytecode line even when the compatibility gate compiles on JDK 25.
     options.release.set(21)
     options.compilerArgs.addAll(listOf("-Xlint:deprecation", "-Xlint:unchecked"))
 }
