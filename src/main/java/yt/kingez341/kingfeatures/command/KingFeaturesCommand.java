@@ -19,16 +19,11 @@ import java.util.Map;
 public final class KingFeaturesCommand implements CommandExecutor, TabCompleter {
     private final KingFeaturesPlugin plugin;
 
-    public KingFeaturesCommand(KingFeaturesPlugin plugin) {
-        this.plugin = plugin;
-    }
+    public KingFeaturesCommand(KingFeaturesPlugin plugin) { this.plugin = plugin; }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (args.length == 0) {
-            help(sender);
-            return true;
-        }
+        if (args.length == 0) { help(sender); return true; }
         String root = args[0].toLowerCase(Locale.ROOT);
         switch (root) {
             case "troll", "trolllab" -> {
@@ -36,6 +31,13 @@ public final class KingFeaturesCommand implements CommandExecutor, TabCompleter 
                 if (!player.hasPermission("kingfeatures.trolllab")) return fail(sender, "No Troll Lab permission.");
                 if (!plugin.isTrollLabAvailable()) return fail(sender, "Troll Lab failed to start. Run /kf status for the exact error.");
                 plugin.getTrollLab().openTargets(player);
+                return true;
+            }
+            case "ranks", "rank", "rankvisuals", "rank-visuals" -> {
+                if (!(sender instanceof Player player)) return fail(sender, "Players only.");
+                if (!player.hasPermission("kingfeatures.admin")) return fail(sender, "No permission.");
+                if (!plugin.isRankVisualsAvailable()) return fail(sender, "Rank Visuals failed to start. Run /kf status.");
+                plugin.getRankVisuals().openGui(player);
                 return true;
             }
             case "bottle" -> { return bottle(sender, args); }
@@ -47,6 +49,7 @@ public final class KingFeaturesCommand implements CommandExecutor, TabCompleter 
                 sender.sendMessage(Text.color("&7Bottles: &f" + (plugin.isBottleAvailable() ? "ready" : "unavailable")));
                 sender.sendMessage(Text.color("&7Troll Lab: &f" + plugin.trollStatus()));
                 sender.sendMessage(Text.color("&7OmniPanel: &f" + plugin.omniPanelStatus()));
+                sender.sendMessage(Text.color("&7Rank Visuals: &f" + plugin.rankVisualStatus()));
                 sender.sendMessage(Text.color("&7Pack: &f" + plugin.packStatus()));
                 if (!plugin.moduleFailures().isEmpty()) {
                     sender.sendMessage(Text.color("&cStartup failures:"));
@@ -62,10 +65,7 @@ public final class KingFeaturesCommand implements CommandExecutor, TabCompleter 
                 sender.sendMessage(Text.color("&aKingFeatures reload completed. Run &f/kf status &ato verify every module."));
                 return true;
             }
-            default -> {
-                help(sender);
-                return true;
-            }
+            default -> { help(sender); return true; }
         }
     }
 
@@ -132,7 +132,10 @@ public final class KingFeaturesCommand implements CommandExecutor, TabCompleter 
         sender.sendMessage(Text.color("&d/kf troll &7- open Troll Lab"));
         sender.sendMessage(Text.color("&d/kf bottle buy &7- buy King's Favor (&6255&7)"));
         sender.sendMessage(Text.color("&d/kf status &7- integration/startup diagnostics"));
-        if (sender.hasPermission("kingfeatures.admin")) sender.sendMessage(Text.color("&d/kf pack &7| &d/kf reload"));
+        if (sender.hasPermission("kingfeatures.admin")) {
+            sender.sendMessage(Text.color("&d/kf ranks &7- configure OmniPanel rank visuals"));
+            sender.sendMessage(Text.color("&d/kf pack &7| &d/kf reload"));
+        }
     }
 
     private static int parseAmount(String raw) {
@@ -148,7 +151,7 @@ public final class KingFeaturesCommand implements CommandExecutor, TabCompleter 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         List<String> values = new ArrayList<>();
-        if (args.length == 1) values.addAll(List.of("troll", "bottle", "pack", "status", "reload"));
+        if (args.length == 1) values.addAll(List.of("troll", "ranks", "bottle", "pack", "status", "reload"));
         else if (args.length == 2 && args[0].equalsIgnoreCase("bottle")) values.addAll(List.of("buy", "template", "give"));
         else if (args.length == 2 && args[0].equalsIgnoreCase("pack")) values.addAll(List.of("status", "resend"));
         else if (args.length == 3 && args[0].equalsIgnoreCase("bottle") && args[1].equalsIgnoreCase("give")) {
