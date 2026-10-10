@@ -1,5 +1,5 @@
-# KingFeatures v0.1.1
-# One plugin, modular features. Ultimate Economy Plus remains the money/shop/crate authority.
+# KingFeatures v0.2.0
+# OmniPanel remains authoritative for ranks. KingFeatures only renders visuals.
 
 bottle:
   enabled: true
@@ -23,31 +23,55 @@ resource-pack:
   enabled: true
   required: true
   send-delay-ticks: 20
-  prompt: "&dSkyStrike visuals &7- ranks, icons and KingFeatures assets"
+  prompt: "&dSkyStrike visuals &7- OmniPanel rank badges and KingFeatures assets"
   mode: AUTO
 
-  # Preferred: if ResourcePackManager is installed, KingFeatures registers its pack there.
-  # RSPM merges/hosts the pack and can fall back to remote hosting when the server's HTTP port is unreachable.
+  bundled-rank-visuals:
+    enabled: true
+
   resourcepackmanager:
     enabled: true
     reload-after-register: true
 
-  # Direct remote fallback if ResourcePackManager is not installed.
   remote-url: ""
   remote-sha1: ""
 
-  # Local pack discovery order.
-  local-file: "resourcepack/KingFeatures-Pack.zip"
+  local-file: "resourcepack/KingFeatures-Rank-Visuals.zip"
+
   auto-import-omnipanel-rank-pack: true
   omnipanel-rank-pack-path: "plugins/OmniPanel/rank-pack/Kingez341YT-Rank-Pack-1.21.11.zip"
 
-  # The old built-in port-8124 self-host path was removed in v0.1.1 because managed hosts
-  # commonly block arbitrary ports. Use ResourcePackManager or remote-url instead.
+rank-visuals:
+  enabled: true
+  refresh-ticks: 20
+
+  # Rank detection is permission-free. KingFeatures asks OmniPanel's API which rank the player has.
+  contexts:
+    player-list: true
+    display-name: true
+
+  # Every supplied badge exists in the pack and can be toggled from /kf ranks.
+  enabled-ranks:
+    owner: true
+    co_owner: true
+    ceo: true
+    manager: true
+    admin: true
+    builder: true
+    developer: true
+    moderator: true
+    helper: true
+    mvp: true
+    vip: true
+    youtuber: true
+    member: true
 
 omnipanel:
   enabled: true
   button-slot: 45
   button-priority: 110
+  rank-visuals-button-slot: 46
+  rank-visuals-button-priority: 115
   reconnect-seconds: 10
 
 troll-lab:
