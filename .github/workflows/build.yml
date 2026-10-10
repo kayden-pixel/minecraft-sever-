@@ -17,6 +17,11 @@ jobs:
             java: '21'
             release: '21'
             upload: true
+          - label: '26.2'
+            paper: '26.2.build.129-stable'
+            java: '25'
+            release: '25'
+            upload: false
           - label: '26.3'
             paper: '26.3.build.+'
             java: '25'
@@ -39,3 +44,76 @@ jobs:
         with:
           name: KingFeatures-${{ github.sha }}
           path: build/libs/KingFeatures-*.jar
+
+  runtime-smoke-26-2:
+    name: Runtime Paper 26.2 build 129
+    needs: compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/download-artifact@v4
+        with:
+          name: KingFeatures-${{ github.sha }}
+          path: artifact
+      - name: Prepare exact Paper 26.2 build 129 server
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p smoke/plugins/OmniPanel/rank-pack
+          JAR_PATH=$(find artifact -maxdepth 2 -type f -name 'KingFeatures-*.jar' | head -1)
+          test -n "$JAR_PATH"
+          cp "$JAR_PATH" smoke/plugins/KingFeatures-0.1.1.jar
+
+          # Create a tiny stand-in at the exact OmniPanel rank-pack path. This verifies
+          # KingFeatures resolves Paper's relative plugins/ data path correctly at runtime.
+          printf 'pack-smoke-test' > smoke/plugins/OmniPanel/rank-pack/pack.txt
+          (cd smoke/plugins/OmniPanel/rank-pack && zip -q Kingez341YT-Rank-Pack-1.21.11.zip pack.txt && rm pack.txt)
+
+          USER_AGENT='KingFeatures-CI/0.1.1 (https://github.com/kayden-pixel/minecraft-sever-)'
+          BUILDS=$(curl -fsSL -H "User-Agent: $USER_AGENT" 'https://fill.papermc.io/v3/projects/paper/versions/26.2/builds')
+          PAPER_URL=$(printf '%s' "$BUILDS" | jq -r 'first(.[] | select(.id == 129) | .downloads["server:default"].url) // empty')
+          test -n "$PAPER_URL"
+          curl -fsSL -H "User-Agent: $USER_AGENT" "$PAPER_URL" -o smoke/paper-26.2-129.jar
+          echo 'eula=true' > smoke/eula.txt
+      - name: Boot Paper and verify KingFeatures stays enabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd smoke
+          java -Xms512M -Xmx1024M -jar paper-26.2-129.jar --nogui > server.log 2>&1 &
+          SERVER_PID=$!
+          cleanup() {
+            kill "$SERVER_PID" 2>/dev/null || true
+            wait "$SERVER_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          READY=0
+          for i in $(seq 1 120); do
+            if grep -q 'Done (' server.log; then
+              READY=1
+              break
+            fi
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              cat server.log
+              echo 'Paper exited before startup completed.' >&2
+              exit 1
+            fi
+            sleep 1
+          done
+
+          if [ "$READY" -ne 1 ]; then
+            cat server.log
+            echo 'Paper did not finish startup within the smoke-test window.' >&2
+            exit 1
+          fi
+
+          cat server.log
+          grep -q 'KingFeatures v0.1.1 enabled' server.log
+          grep -q 'Auto-detected OmniPanel rank pack:' server.log
+          if grep -q 'Could not inspect local resource pack' server.log; then exit 1; fi
+          if grep -q 'Error occurred while enabling KingFeatures' server.log; then exit 1; fi
+          if grep -q 'Disabling KingFeatures' server.log; then exit 1; fi

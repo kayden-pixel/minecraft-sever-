@@ -1,7 +1,5 @@
 package yt.kingez341.kingfeatures.pack;
 
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -9,147 +7,262 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerResourcePackStatusEvent;
+import org.bukkit.plugin.Plugin;
 import yt.kingez341.kingfeatures.KingFeaturesPlugin;
 import yt.kingez341.kingfeatures.util.Text;
 
-import java.io.IOException;
-import java.io.OutputStream;
 import java.lang.reflect.Method;
-import java.net.InetSocketAddress;
+import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.UUID;
-import java.util.concurrent.Executors;
 
 public final class ResourcePackManager implements Listener {
     private static final UUID PACK_ID = UUID.fromString("34100000-0000-4000-8000-000000000255");
 
+    private enum DeliveryMode {
+        NONE,
+        RESOURCEPACKMANAGER,
+        DIRECT_REMOTE
+    }
+
     private final KingFeaturesPlugin plugin;
-    private HttpServer server;
     private Path localPack;
-    private String sha1;
+    private String localSha1;
+    private String remoteUrl;
+    private String remoteSha1;
+    private DeliveryMode deliveryMode = DeliveryMode.NONE;
     private String status = "not-started";
 
-    public ResourcePackManager(KingFeaturesPlugin plugin) { this.plugin = plugin; }
+    public ResourcePackManager(KingFeaturesPlugin plugin) {
+        this.plugin = plugin;
+    }
 
     public void start() {
-        stop();
-        if (!plugin.getConfig().getBoolean("resource-pack.enabled", true)) { status = "disabled"; return; }
-        String remote = String.valueOf(plugin.getConfig().getString("resource-pack.remote-url", "")).trim();
-        if (!remote.isBlank()) { status = "remote:" + remote; return; }
-        localPack = discoverPack();
-        if (localPack == null || !Files.isRegularFile(localPack)) {
-            status = "no-pack-found";
-            plugin.getLogger().warning("No KingFeatures/local OmniPanel rank resource pack found. Auto-send is idle until a pack exists or resource-pack.remote-url is set.");
+        deliveryMode = DeliveryMode.NONE;
+        localPack = null;
+        localSha1 = null;
+        remoteUrl = "";
+        remoteSha1 = "";
+
+        if (!plugin.getConfig().getBoolean("resource-pack.enabled", true)) {
+            status = "disabled";
             return;
         }
+
         try {
-            sha1 = sha1(localPack);
-            if (plugin.getConfig().getBoolean("resource-pack.self-host.enabled", true)) startHttpServer();
-            else status = "local-pack-found-self-host-disabled";
-        } catch (Exception exception) {
-            status = "error:" + exception.getClass().getSimpleName();
-            plugin.getLogger().warning("Could not prepare resource pack: " + exception.getMessage());
+            localPack = discoverPack();
+            if (localPack != null && Files.isRegularFile(localPack)) {
+                localSha1 = sha1(localPack);
+            }
+        } catch (Throwable throwable) {
+            plugin.getLogger().warning("Could not inspect local resource pack: " + rootMessage(throwable));
+        }
+
+        remoteUrl = clean(plugin.getConfig().getString("resource-pack.remote-url", ""));
+        remoteSha1 = clean(plugin.getConfig().getString("resource-pack.remote-sha1", "")).toLowerCase(Locale.ROOT);
+        if (!remoteSha1.matches("[0-9a-f]{40}")) remoteSha1 = "";
+
+        if (plugin.getConfig().getBoolean("resource-pack.resourcepackmanager.enabled", true) && registerWithResourcePackManager()) {
+            deliveryMode = DeliveryMode.RESOURCEPACKMANAGER;
+            return;
+        }
+
+        if (!remoteUrl.isBlank()) {
+            deliveryMode = DeliveryMode.DIRECT_REMOTE;
+            status = "direct-remote:" + remoteUrl + (remoteSha1.isBlank() ? " hash=none" : " sha1=" + remoteSha1);
+            plugin.getLogger().info("Resource pack delivery using direct remote URL fallback.");
+            return;
+        }
+
+        if (localPack != null && Files.isRegularFile(localPack)) {
+            status = "local-pack-found-but-no-distributor:" + localPack.getFileName();
+            plugin.getLogger().warning("Found resource pack " + localPack + " but ResourcePackManager is not available and resource-pack.remote-url is blank. The old port-8124 self-host was removed because it is unreliable on managed hosts. Install ResourcePackManager or configure an HTTPS remote URL.");
+        } else {
+            status = "no-pack-found";
+            plugin.getLogger().warning("No KingFeatures/OmniPanel resource pack found. Pack delivery is idle.");
         }
     }
 
-    public void stop() { if (server != null) { server.stop(0); server = null; } }
-    public String status() { return status; }
-    public Path localPack() { return localPack; }
+    public void stop() {
+        deliveryMode = DeliveryMode.NONE;
+    }
+
+    public String status() {
+        return status;
+    }
+
+    public Path localPack() {
+        return localPack;
+    }
 
     public void send(Player player) {
         if (!plugin.getConfig().getBoolean("resource-pack.enabled", true)) return;
-        String url = resolveUrl(player);
-        if (url == null || url.isBlank()) return;
+
+        if (deliveryMode == DeliveryMode.RESOURCEPACKMANAGER) {
+            boolean reload = reloadResourcePackManager();
+            player.sendMessage(Text.color(reload
+                    ? "&aResourcePackManager is rebuilding/resending the merged server pack."
+                    : "&eResourcePackManager owns pack delivery; reconnect if the pack does not refresh."));
+            return;
+        }
+
+        if (deliveryMode != DeliveryMode.DIRECT_REMOTE || remoteUrl.isBlank()) return;
+
         try {
-            String effectiveHash = sha1;
-            if ((effectiveHash == null || effectiveHash.isBlank()) && localPack != null && Files.isRegularFile(localPack)) effectiveHash = sha1(localPack);
-            if (effectiveHash == null || effectiveHash.isBlank()) return;
             boolean required = plugin.getConfig().getBoolean("resource-pack.required", true);
             String promptText = Text.strip(plugin.getConfig().getString("resource-pack.prompt", "SkyStrike resource pack"));
-            player.setResourcePack(PACK_ID, url, effectiveHash, Component.text(promptText), required);
+            Component prompt = Component.text(promptText);
+
+            if (!remoteSha1.isBlank()) {
+                player.setResourcePack(PACK_ID, remoteUrl, remoteSha1, prompt, required);
+            } else {
+                player.setResourcePack(PACK_ID, remoteUrl, (byte[]) null, prompt, required);
+            }
+            plugin.getLogger().info("Sent KingFeatures remote resource-pack request to " + player.getName() + ".");
         } catch (Throwable throwable) {
-            plugin.getLogger().warning("Resource pack send failed for " + player.getName() + ": " + throwable.getMessage());
+            plugin.getLogger().warning("Resource pack send failed for " + player.getName() + ": " + rootMessage(throwable));
         }
     }
 
-    @EventHandler public void onJoin(PlayerJoinEvent event) {
+    @EventHandler
+    public void onJoin(PlayerJoinEvent event) {
+        if (deliveryMode != DeliveryMode.DIRECT_REMOTE) return;
         long delay = Math.max(1L, plugin.getConfig().getLong("resource-pack.send-delay-ticks", 20L));
-        Bukkit.getScheduler().runTaskLater(plugin, () -> { if (event.getPlayer().isOnline()) send(event.getPlayer()); }, delay);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (event.getPlayer().isOnline()) send(event.getPlayer());
+        }, delay);
     }
 
-    @EventHandler public void onPackStatus(PlayerResourcePackStatusEvent event) {
+    @EventHandler
+    public void onPackStatus(PlayerResourcePackStatusEvent event) {
         if (!PACK_ID.equals(event.getID())) return;
-        plugin.getLogger().info("Resource pack " + event.getStatus().name().toLowerCase(Locale.ROOT) + " for " + event.getPlayer().getName());
+        status = "direct-remote:last=" + event.getStatus().name().toLowerCase(Locale.ROOT) + ":player=" + event.getPlayer().getName();
+        plugin.getLogger().info("KingFeatures resource pack " + event.getStatus().name().toLowerCase(Locale.ROOT) + " for " + event.getPlayer().getName());
+    }
+
+    private boolean registerWithResourcePackManager() {
+        try {
+            Plugin rspm = Bukkit.getPluginManager().getPlugin("ResourcePackManager");
+            if (rspm == null || !rspm.isEnabled()) return false;
+
+            ClassLoader loader = rspm.getClass().getClassLoader();
+            Class<?> api = Class.forName("com.magmaguy.resourcepackmanager.api.ResourcePackManagerAPI", true, loader);
+
+            if (localPack != null && Files.isRegularFile(localPack)) {
+                Path pluginsDir = plugin.getDataFolder().toPath().toAbsolutePath().normalize().getParent();
+                Path pack = localPack.toAbsolutePath().normalize();
+                if (pluginsDir == null || !pack.startsWith(pluginsDir)) {
+                    status = "rspm-local-pack-outside-plugins:" + pack;
+                    plugin.getLogger().warning("ResourcePackManager requires a path under plugins/. Pack is outside that directory: " + pack);
+                    return false;
+                }
+
+                String relative = pluginsDir.relativize(pack).toString().replace('\\', '/');
+                Method register = api.getMethod(
+                        "registerLocalResourcePack",
+                        String.class,
+                        String.class,
+                        boolean.class,
+                        boolean.class,
+                        boolean.class,
+                        String.class
+                );
+                register.invoke(null, "KingFeatures", relative, false, true, true, "kingfeatures reload");
+                status = "resourcepackmanager:local=" + relative + " sha1=" + localSha1;
+                plugin.getLogger().info("Registered local KingFeatures pack with ResourcePackManager: " + relative);
+            } else if (!remoteUrl.isBlank()) {
+                Method register = api.getMethod(
+                        "registerRemoteResourcePack",
+                        String.class,
+                        String.class,
+                        boolean.class,
+                        boolean.class,
+                        boolean.class,
+                        String.class
+                );
+                register.invoke(null, "KingFeatures", remoteUrl, false, true, true, "kingfeatures reload");
+                status = "resourcepackmanager:remote=" + remoteUrl;
+                plugin.getLogger().info("Registered remote KingFeatures pack with ResourcePackManager.");
+            } else {
+                return false;
+            }
+
+            if (plugin.getConfig().getBoolean("resource-pack.resourcepackmanager.reload-after-register", true)) {
+                Bukkit.getScheduler().runTaskLater(plugin, this::reloadResourcePackManager, 20L);
+            }
+            return true;
+        } catch (Throwable throwable) {
+            status = "resourcepackmanager-error:" + throwable.getClass().getSimpleName() + ":" + rootMessage(throwable);
+            plugin.getLogger().warning("ResourcePackManager integration failed; trying fallback delivery: " + rootMessage(throwable));
+            return false;
+        }
+    }
+
+    private boolean reloadResourcePackManager() {
+        try {
+            Plugin rspm = Bukkit.getPluginManager().getPlugin("ResourcePackManager");
+            if (rspm == null || !rspm.isEnabled()) return false;
+            Class<?> api = Class.forName("com.magmaguy.resourcepackmanager.api.ResourcePackManagerAPI", true, rspm.getClass().getClassLoader());
+            Method reload = api.getMethod("reloadResourcePack");
+            if (!Modifier.isStatic(reload.getModifiers())) return false;
+            reload.invoke(null);
+            return true;
+        } catch (Throwable throwable) {
+            plugin.getLogger().warning("ResourcePackManager reload failed: " + rootMessage(throwable));
+            return false;
+        }
     }
 
     private Path discoverPack() {
-        Path configured = plugin.getDataFolder().toPath().resolve(plugin.getConfig().getString("resource-pack.local-file", "resourcepack/KingFeatures-Pack.zip")).normalize();
+        Path dataFolder = plugin.getDataFolder().toPath().toAbsolutePath().normalize();
+        Path configured = dataFolder
+                .resolve(plugin.getConfig().getString("resource-pack.local-file", "resourcepack/KingFeatures-Pack.zip"))
+                .normalize();
         if (Files.isRegularFile(configured)) return configured;
+
         if (plugin.getConfig().getBoolean("resource-pack.auto-import-omnipanel-rank-pack", true)) {
-            Path serverRoot = plugin.getDataFolder().toPath().getParent().getParent();
-            String relative = plugin.getConfig().getString("resource-pack.omnipanel-rank-pack-path", "plugins/OmniPanel/rank-pack/Kingez341YT-Rank-Pack-1.21.11.zip");
-            Path omni = serverRoot.resolve(relative).normalize();
-            if (Files.isRegularFile(omni)) { plugin.getLogger().info("Auto-detected OmniPanel rank pack: " + omni); return omni; }
+            Path pluginsDir = dataFolder.getParent();
+            Path serverRoot = pluginsDir == null ? null : pluginsDir.getParent();
+            if (serverRoot == null) {
+                serverRoot = Path.of(".").toAbsolutePath().normalize();
+            }
+            String relative = plugin.getConfig().getString(
+                    "resource-pack.omnipanel-rank-pack-path",
+                    "plugins/OmniPanel/rank-pack/Kingez341YT-Rank-Pack-1.21.11.zip"
+            );
+            Path omni = serverRoot.resolve(relative).toAbsolutePath().normalize();
+            if (Files.isRegularFile(omni)) {
+                plugin.getLogger().info("Auto-detected OmniPanel rank pack: " + omni);
+                return omni;
+            }
         }
-        return null;
-    }
-
-    private void startHttpServer() throws IOException {
-        String bind = plugin.getConfig().getString("resource-pack.self-host.bind-address", "0.0.0.0");
-        int port = plugin.getConfig().getInt("resource-pack.self-host.port", 8124);
-        server = HttpServer.create(new InetSocketAddress(bind, port), 0);
-        server.createContext("/kingfeatures-pack.zip", this::handlePackRequest);
-        server.setExecutor(Executors.newFixedThreadPool(2, runnable -> { Thread thread = new Thread(runnable, "KingFeatures-PackHTTP"); thread.setDaemon(true); return thread; }));
-        server.start();
-        status = "self-hosted:" + bind + ":" + port + " sha1=" + sha1;
-    }
-
-    private void handlePackRequest(HttpExchange exchange) throws IOException {
-        if (localPack == null || !Files.isRegularFile(localPack)) { exchange.sendResponseHeaders(404, -1); exchange.close(); return; }
-        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod()) && !"HEAD".equalsIgnoreCase(exchange.getRequestMethod())) { exchange.sendResponseHeaders(405, -1); exchange.close(); return; }
-        long size = Files.size(localPack);
-        exchange.getResponseHeaders().set("Content-Type", "application/zip");
-        exchange.getResponseHeaders().set("Cache-Control", "public, max-age=300");
-        exchange.getResponseHeaders().set("ETag", '"' + sha1 + '"');
-        exchange.sendResponseHeaders(200, "HEAD".equalsIgnoreCase(exchange.getRequestMethod()) ? -1 : size);
-        if (!"HEAD".equalsIgnoreCase(exchange.getRequestMethod())) {
-            try (OutputStream output = exchange.getResponseBody()) { Files.copy(localPack, output); }
-        } else exchange.close();
-    }
-
-    private String resolveUrl(Player player) {
-        String remote = String.valueOf(plugin.getConfig().getString("resource-pack.remote-url", "")).trim();
-        if (!remote.isBlank()) return remote;
-        if (server == null) return null;
-        String host = String.valueOf(plugin.getConfig().getString("resource-pack.self-host.public-host", "")).trim();
-        if (host.isBlank()) host = virtualHost(player);
-        if (host == null || host.isBlank()) return null;
-        int port = plugin.getConfig().getInt("resource-pack.self-host.port", 8124);
-        if (host.startsWith("http://") || host.startsWith("https://")) return host.replaceAll("/+$", "") + ":" + port + "/kingfeatures-pack.zip";
-        int colon = host.indexOf(':');
-        if (colon > 0 && host.indexOf(':', colon + 1) < 0) host = host.substring(0, colon);
-        return "http://" + host + ":" + port + "/kingfeatures-pack.zip";
-    }
-
-    private static String virtualHost(Player player) {
-        try {
-            Method method = player.getClass().getMethod("getVirtualHost");
-            Object value = method.invoke(player);
-            if (value instanceof InetSocketAddress address && address.getHostString() != null) return address.getHostString();
-        } catch (ReflectiveOperationException ignored) {}
         return null;
     }
 
     private static String sha1(Path path) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-1");
         try (var input = Files.newInputStream(path)) {
-            byte[] buffer = new byte[8192]; int read;
-            while ((read = input.read(buffer)) >= 0) if (read > 0) digest.update(buffer, 0, read);
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) >= 0) {
+                if (read > 0) digest.update(buffer, 0, read);
+            }
         }
         return HexFormat.of().formatHex(digest.digest());
+    }
+
+    private static String clean(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private static String rootMessage(Throwable throwable) {
+        Throwable cursor = throwable;
+        while (cursor.getCause() != null && cursor.getCause() != cursor) cursor = cursor.getCause();
+        String message = cursor.getMessage();
+        return message == null || message.isBlank() ? cursor.getClass().getSimpleName() : message.replace('\n', ' ');
     }
 }
