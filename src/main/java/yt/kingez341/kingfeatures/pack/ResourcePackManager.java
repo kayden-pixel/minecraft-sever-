@@ -11,23 +11,26 @@ import org.bukkit.plugin.Plugin;
 import yt.kingez341.kingfeatures.KingFeaturesPlugin;
 import yt.kingez341.kingfeatures.util.Text;
 
+import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
+import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.zip.ZipFile;
 
 public final class ResourcePackManager implements Listener {
     private static final UUID PACK_ID = UUID.fromString("34100000-0000-4000-8000-000000000255");
+    private static final String BUNDLED_B64_PREFIX = "rankpack/KingFeatures-Rank-Visuals.zip.b64.part";
+    private static final String BUNDLED_NAME = "KingFeatures-Rank-Visuals.zip";
 
-    private enum DeliveryMode {
-        NONE,
-        RESOURCEPACKMANAGER,
-        DIRECT_REMOTE
-    }
+    private enum DeliveryMode { NONE, RESOURCEPACKMANAGER, DIRECT_REMOTE }
 
     private final KingFeaturesPlugin plugin;
     private Path localPack;
@@ -37,9 +40,7 @@ public final class ResourcePackManager implements Listener {
     private DeliveryMode deliveryMode = DeliveryMode.NONE;
     private String status = "not-started";
 
-    public ResourcePackManager(KingFeaturesPlugin plugin) {
-        this.plugin = plugin;
-    }
+    public ResourcePackManager(KingFeaturesPlugin plugin) { this.plugin = plugin; }
 
     public void start() {
         deliveryMode = DeliveryMode.NONE;
@@ -55,9 +56,7 @@ public final class ResourcePackManager implements Listener {
 
         try {
             localPack = discoverPack();
-            if (localPack != null && Files.isRegularFile(localPack)) {
-                localSha1 = sha1(localPack);
-            }
+            if (localPack != null && Files.isRegularFile(localPack)) localSha1 = sha1(localPack);
         } catch (Throwable throwable) {
             plugin.getLogger().warning("Could not inspect local resource pack: " + rootMessage(throwable));
         }
@@ -80,28 +79,19 @@ public final class ResourcePackManager implements Listener {
 
         if (localPack != null && Files.isRegularFile(localPack)) {
             status = "local-pack-found-but-no-distributor:" + localPack.getFileName();
-            plugin.getLogger().warning("Found resource pack " + localPack + " but ResourcePackManager is not available and resource-pack.remote-url is blank. The old port-8124 self-host was removed because it is unreliable on managed hosts. Install ResourcePackManager or configure an HTTPS remote URL.");
+            plugin.getLogger().warning("Found resource pack " + localPack + " but ResourcePackManager is not available and resource-pack.remote-url is blank. Install ResourcePackManager or configure an HTTPS remote URL.");
         } else {
             status = "no-pack-found";
-            plugin.getLogger().warning("No KingFeatures/OmniPanel resource pack found. Pack delivery is idle.");
+            plugin.getLogger().warning("No KingFeatures resource pack found. Pack delivery is idle.");
         }
     }
 
-    public void stop() {
-        deliveryMode = DeliveryMode.NONE;
-    }
-
-    public String status() {
-        return status;
-    }
-
-    public Path localPack() {
-        return localPack;
-    }
+    public void stop() { deliveryMode = DeliveryMode.NONE; }
+    public String status() { return status; }
+    public Path localPack() { return localPack; }
 
     public void send(Player player) {
         if (!plugin.getConfig().getBoolean("resource-pack.enabled", true)) return;
-
         if (deliveryMode == DeliveryMode.RESOURCEPACKMANAGER) {
             boolean reload = reloadResourcePackManager();
             player.sendMessage(Text.color(reload
@@ -109,19 +99,13 @@ public final class ResourcePackManager implements Listener {
                     : "&eResourcePackManager owns pack delivery; reconnect if the pack does not refresh."));
             return;
         }
-
         if (deliveryMode != DeliveryMode.DIRECT_REMOTE || remoteUrl.isBlank()) return;
 
         try {
             boolean required = plugin.getConfig().getBoolean("resource-pack.required", true);
-            String promptText = Text.strip(plugin.getConfig().getString("resource-pack.prompt", "SkyStrike resource pack"));
-            Component prompt = Component.text(promptText);
-
-            if (!remoteSha1.isBlank()) {
-                player.setResourcePack(PACK_ID, remoteUrl, remoteSha1, prompt, required);
-            } else {
-                player.setResourcePack(PACK_ID, remoteUrl, (byte[]) null, prompt, required);
-            }
+            Component prompt = Component.text(Text.strip(plugin.getConfig().getString("resource-pack.prompt", "SkyStrike resource pack")));
+            if (!remoteSha1.isBlank()) player.setResourcePack(PACK_ID, remoteUrl, remoteSha1, prompt, required);
+            else player.setResourcePack(PACK_ID, remoteUrl, (byte[]) null, prompt, required);
             plugin.getLogger().info("Sent KingFeatures remote resource-pack request to " + player.getName() + ".");
         } catch (Throwable throwable) {
             plugin.getLogger().warning("Resource pack send failed for " + player.getName() + ": " + rootMessage(throwable));
@@ -148,7 +132,6 @@ public final class ResourcePackManager implements Listener {
         try {
             Plugin rspm = Bukkit.getPluginManager().getPlugin("ResourcePackManager");
             if (rspm == null || !rspm.isEnabled()) return false;
-
             ClassLoader loader = rspm.getClass().getClassLoader();
             Class<?> api = Class.forName("com.magmaguy.resourcepackmanager.api.ResourcePackManagerAPI", true, loader);
 
@@ -160,36 +143,19 @@ public final class ResourcePackManager implements Listener {
                     plugin.getLogger().warning("ResourcePackManager requires a path under plugins/. Pack is outside that directory: " + pack);
                     return false;
                 }
-
                 String relative = pluginsDir.relativize(pack).toString().replace('\\', '/');
-                Method register = api.getMethod(
-                        "registerLocalResourcePack",
-                        String.class,
-                        String.class,
-                        boolean.class,
-                        boolean.class,
-                        boolean.class,
-                        String.class
-                );
+                Method register = api.getMethod("registerLocalResourcePack", String.class, String.class,
+                        boolean.class, boolean.class, boolean.class, String.class);
                 register.invoke(null, "KingFeatures", relative, false, true, true, "kingfeatures reload");
                 status = "resourcepackmanager:local=" + relative + " sha1=" + localSha1;
-                plugin.getLogger().info("Registered local KingFeatures pack with ResourcePackManager: " + relative);
+                plugin.getLogger().info("Registered KingFeatures rank visuals with ResourcePackManager: " + relative);
             } else if (!remoteUrl.isBlank()) {
-                Method register = api.getMethod(
-                        "registerRemoteResourcePack",
-                        String.class,
-                        String.class,
-                        boolean.class,
-                        boolean.class,
-                        boolean.class,
-                        String.class
-                );
+                Method register = api.getMethod("registerRemoteResourcePack", String.class, String.class,
+                        boolean.class, boolean.class, boolean.class, String.class);
                 register.invoke(null, "KingFeatures", remoteUrl, false, true, true, "kingfeatures reload");
                 status = "resourcepackmanager:remote=" + remoteUrl;
                 plugin.getLogger().info("Registered remote KingFeatures pack with ResourcePackManager.");
-            } else {
-                return false;
-            }
+            } else return false;
 
             if (plugin.getConfig().getBoolean("resource-pack.resourcepackmanager.reload-after-register", true)) {
                 Bukkit.getScheduler().runTaskLater(plugin, this::reloadResourcePackManager, 20L);
@@ -217,47 +183,86 @@ public final class ResourcePackManager implements Listener {
         }
     }
 
-    private Path discoverPack() {
+    private Path discoverPack() throws Exception {
         Path dataFolder = plugin.getDataFolder().toPath().toAbsolutePath().normalize();
-        Path configured = dataFolder
-                .resolve(plugin.getConfig().getString("resource-pack.local-file", "resourcepack/KingFeatures-Pack.zip"))
-                .normalize();
+        String configuredName = clean(plugin.getConfig().getString("resource-pack.local-file", "resourcepack/" + BUNDLED_NAME));
+        Path configured = dataFolder.resolve(configuredName.isBlank() ? "resourcepack/" + BUNDLED_NAME : configuredName).normalize();
+
+        boolean bundled = plugin.getConfig().getBoolean("resource-pack.bundled-rank-visuals.enabled", true);
+        if (bundled && configured.getFileName() != null && BUNDLED_NAME.equalsIgnoreCase(configured.getFileName().toString())) {
+            Path extracted = extractBundledRankPack(configured);
+            if (extracted != null) return extracted;
+        }
         if (Files.isRegularFile(configured)) return configured;
+
+        if (bundled) {
+            Path extracted = extractBundledRankPack(dataFolder.resolve("resourcepack").resolve(BUNDLED_NAME));
+            if (extracted != null) return extracted;
+        }
 
         if (plugin.getConfig().getBoolean("resource-pack.auto-import-omnipanel-rank-pack", true)) {
             Path pluginsDir = dataFolder.getParent();
-            Path serverRoot = pluginsDir == null ? null : pluginsDir.getParent();
-            if (serverRoot == null) {
-                serverRoot = Path.of(".").toAbsolutePath().normalize();
-            }
-            String relative = plugin.getConfig().getString(
-                    "resource-pack.omnipanel-rank-pack-path",
-                    "plugins/OmniPanel/rank-pack/Kingez341YT-Rank-Pack-1.21.11.zip"
-            );
+            Path serverRoot = pluginsDir == null ? Path.of(".").toAbsolutePath().normalize() : pluginsDir.getParent();
+            if (serverRoot == null) serverRoot = Path.of(".").toAbsolutePath().normalize();
+            String relative = plugin.getConfig().getString("resource-pack.omnipanel-rank-pack-path",
+                    "plugins/OmniPanel/rank-pack/Kingez341YT-Rank-Pack-1.21.11.zip");
             Path omni = serverRoot.resolve(relative).toAbsolutePath().normalize();
             if (Files.isRegularFile(omni)) {
-                plugin.getLogger().info("Auto-detected OmniPanel rank pack: " + omni);
+                plugin.getLogger().info("Using legacy OmniPanel rank pack fallback: " + omni);
                 return omni;
             }
         }
         return null;
     }
 
-    private static String sha1(Path path) throws Exception {
-        MessageDigest digest = MessageDigest.getInstance("SHA-1");
+    private Path extractBundledRankPack(Path output) throws Exception {
+        StringBuilder encodedText = new StringBuilder();
+        for (int part = 1; part <= 4; part++) {
+            String path = BUNDLED_B64_PREFIX + part;
+            InputStream input = plugin.getResource(path);
+            if (input == null) {
+                plugin.getLogger().warning("Bundled rank pack resource is missing from the KingFeatures JAR: " + path);
+                return null;
+            }
+            try (input) {
+                encodedText.append(new String(input.readAllBytes(), StandardCharsets.US_ASCII).replaceAll("\\s+", ""));
+            }
+        }
+        byte[] bytes = Base64.getDecoder().decode(encodedText.toString());
+        Files.createDirectories(output.getParent());
+
+        Path temp = output.resolveSibling(output.getFileName() + ".tmp");
+        Files.write(temp, bytes);
+        try (ZipFile ignored = new ZipFile(temp.toFile())) { }
+
+        boolean changed = !Files.isRegularFile(output) || !sha256(output).equals(sha256(temp));
+        if (changed) {
+            try {
+                Files.move(temp, output, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (Exception atomicUnavailable) {
+                Files.move(temp, output, StandardCopyOption.REPLACE_EXISTING);
+            }
+            plugin.getLogger().info("Installed bundled OmniPanel rank visual pack: " + output);
+        } else {
+            Files.deleteIfExists(temp);
+        }
+        return output;
+    }
+
+    private static String sha1(Path path) throws Exception { return digest(path, "SHA-1"); }
+    private static String sha256(Path path) throws Exception { return digest(path, "SHA-256"); }
+
+    private static String digest(Path path, String algorithm) throws Exception {
+        MessageDigest digest = MessageDigest.getInstance(algorithm);
         try (var input = Files.newInputStream(path)) {
             byte[] buffer = new byte[8192];
             int read;
-            while ((read = input.read(buffer)) >= 0) {
-                if (read > 0) digest.update(buffer, 0, read);
-            }
+            while ((read = input.read(buffer)) >= 0) if (read > 0) digest.update(buffer, 0, read);
         }
         return HexFormat.of().formatHex(digest.digest());
     }
 
-    private static String clean(String value) {
-        return value == null ? "" : value.trim();
-    }
+    private static String clean(String value) { return value == null ? "" : value.trim(); }
 
     private static String rootMessage(Throwable throwable) {
         Throwable cursor = throwable;
