@@ -29,7 +29,15 @@ import java.util.zip.ZipInputStream;
 
 public final class ResourcePackManager implements Listener {
     private static final UUID PACK_ID = UUID.fromString("34100000-0000-4000-8000-000000000255");
-    private static final int EMBEDDED_PART_COUNT = 6;
+    private static final String[] EMBEDDED_PARTS = {
+            "embedded/KingFeatures-Rank-Pack.part00",
+            "embedded/KingFeatures-Rank-Pack.part01",
+            "embedded/KingFeatures-Rank-Pack.part02",
+            "embedded/KingFeatures-Rank-Pack.part03",
+            "embedded/KingFeatures-Rank-Pack.part04a",
+            "embedded/KingFeatures-Rank-Pack.part04b",
+            "embedded/KingFeatures-Rank-Pack.part05"
+    };
     private static final String EMBEDDED_PACK_NAME = "KingFeatures-Rank-Pack.zip";
     private static final String EMBEDDED_SHA1 = "6afdaefa9da8fb98c38b481e125c6b9ebce9bf1c";
     private static final String BUILTIN_PACK_URL = "https://raw.githubusercontent.com/kayden-pixel/minecraft-sever-/pack-host/KingFeatures-Rank-Pack.zip";
@@ -240,10 +248,9 @@ public final class ResourcePackManager implements Listener {
             plugin.getLogger().info("Replacing outdated KingFeatures embedded rank pack (sha1=" + existingSha1 + ").");
         }
 
-        StringBuilder encoded = new StringBuilder(46000);
+        StringBuilder encoded = new StringBuilder(48000);
         ClassLoader loader = plugin.getClass().getClassLoader();
-        for (int i = 0; i < EMBEDDED_PART_COUNT; i++) {
-            String resource = String.format(Locale.ROOT, "embedded/KingFeatures-Rank-Pack.part%02d", i);
+        for (String resource : EMBEDDED_PARTS) {
             try (InputStream input = loader.getResourceAsStream(resource)) {
                 if (input == null) throw new IllegalStateException("Missing embedded pack resource " + resource);
                 encoded.append(new String(input.readAllBytes(), StandardCharsets.US_ASCII).trim());
