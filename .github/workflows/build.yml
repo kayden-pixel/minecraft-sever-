@@ -46,7 +46,7 @@ jobs:
           path: build/libs/KingFeatures-*.jar
 
   runtime-smoke-26-2:
-    name: Runtime Paper 26.2 build 129
+    name: Runtime Paper 26.2 build 129 + bundled rank pack
     needs: compatibility
     runs-on: ubuntu-latest
     steps:
@@ -62,23 +62,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p smoke/plugins/OmniPanel/rank-pack
+          mkdir -p smoke/plugins
           JAR_PATH=$(find artifact -maxdepth 2 -type f -name 'KingFeatures-*.jar' | head -1)
           test -n "$JAR_PATH"
-          cp "$JAR_PATH" smoke/plugins/KingFeatures-0.1.1.jar
+          cp "$JAR_PATH" smoke/plugins/KingFeatures-0.2.0.jar
 
-          # Create a tiny stand-in at the exact OmniPanel rank-pack path. This verifies
-          # KingFeatures resolves Paper's relative plugins/ data path correctly at runtime.
-          printf 'pack-smoke-test' > smoke/plugins/OmniPanel/rank-pack/pack.txt
-          (cd smoke/plugins/OmniPanel/rank-pack && zip -q Kingez341YT-Rank-Pack-1.21.11.zip pack.txt && rm pack.txt)
-
-          USER_AGENT='KingFeatures-CI/0.1.1 (https://github.com/kayden-pixel/minecraft-sever-)'
+          USER_AGENT='KingFeatures-CI/0.2.0 (https://github.com/kayden-pixel/minecraft-sever-)'
           BUILDS=$(curl -fsSL -H "User-Agent: $USER_AGENT" 'https://fill.papermc.io/v3/projects/paper/versions/26.2/builds')
           PAPER_URL=$(printf '%s' "$BUILDS" | jq -r 'first(.[] | select(.id == 129) | .downloads["server:default"].url) // empty')
           test -n "$PAPER_URL"
           curl -fsSL -H "User-Agent: $USER_AGENT" "$PAPER_URL" -o smoke/paper-26.2-129.jar
           echo 'eula=true' > smoke/eula.txt
-      - name: Boot Paper and verify KingFeatures stays enabled
+      - name: Boot Paper and verify KingFeatures + rank pack
         shell: bash
         run: |
           set -euo pipefail
@@ -112,8 +107,15 @@ jobs:
           fi
 
           cat server.log
-          grep -q 'KingFeatures v0.1.1 enabled' server.log
-          grep -q 'Auto-detected OmniPanel rank pack:' server.log
-          if grep -q 'Could not inspect local resource pack' server.log; then exit 1; fi
+          grep -q 'KingFeatures v0.2.0 enabled' server.log
+          grep -q 'Installed bundled OmniPanel rank visual pack:' server.log
+          if grep -q 'Bundled rank pack resource is missing' server.log; then exit 1; fi
           if grep -q 'Error occurred while enabling KingFeatures' server.log; then exit 1; fi
           if grep -q 'Disabling KingFeatures' server.log; then exit 1; fi
+
+          PACK='plugins/KingFeatures/resourcepack/KingFeatures-Rank-Visuals.zip'
+          test -f "$PACK"
+          test "$(sha256sum "$PACK" | awk '{print $1}')" = 'b55691dab5b34ed84de5d40b09bbb0ba5407b08e204dc2648801eb99d0f91939'
+          unzip -t "$PACK"
+          unzip -p "$PACK" assets/kingfeatures/font/ranks.json | grep -q 'kingfeatures:font/ranks/owner.png'
+          unzip -p "$PACK" assets/kingfeatures/font/ranks.json | grep -q 'kingfeatures:font/ranks/member.png'
