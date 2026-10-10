@@ -28,6 +28,7 @@ import java.util.zip.ZipFile;
 public final class ResourcePackManager implements Listener {
     private static final UUID PACK_ID = UUID.fromString("34100000-0000-4000-8000-000000000255");
     private static final String BUNDLED_B64_PREFIX = "rankpack/KingFeatures-Rank-Visuals.zip.b64.part";
+    private static final int BUNDLED_PARTS = 21;
     private static final String BUNDLED_NAME = "KingFeatures-Rank-Visuals.zip";
 
     private enum DeliveryMode { NONE, RESOURCEPACKMANAGER, DIRECT_REMOTE }
@@ -216,8 +217,8 @@ public final class ResourcePackManager implements Listener {
     }
 
     private Path extractBundledRankPack(Path output) throws Exception {
-        StringBuilder encodedText = new StringBuilder();
-        for (int part = 1; part <= 4; part++) {
+        StringBuilder encodedText = new StringBuilder(42000);
+        for (int part = 1; part <= BUNDLED_PARTS; part++) {
             String path = BUNDLED_B64_PREFIX + part;
             InputStream input = plugin.getResource(path);
             if (input == null) {
@@ -228,9 +229,9 @@ public final class ResourcePackManager implements Listener {
                 encodedText.append(new String(input.readAllBytes(), StandardCharsets.US_ASCII).replaceAll("\\s+", ""));
             }
         }
+
         byte[] bytes = Base64.getDecoder().decode(encodedText.toString());
         Files.createDirectories(output.getParent());
-
         Path temp = output.resolveSibling(output.getFileName() + ".tmp");
         Files.write(temp, bytes);
         try (ZipFile ignored = new ZipFile(temp.toFile())) { }
