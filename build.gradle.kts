@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "yt.kingez341"
-version = "0.1.2"
+version = "0.1.3"
 
 val paperVersion = providers.gradleProperty("paperVersion").orElse("1.21.11-R0.1-SNAPSHOT")
 val toolchainVersion = providers.gradleProperty("toolchainVersion").map(String::toInt).orElse(21)
