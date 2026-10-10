@@ -2,6 +2,7 @@ package yt.kingez341.kingfeatures.integration;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 import yt.kingez341.kingfeatures.KingFeaturesPlugin;
@@ -44,13 +45,18 @@ public final class OmniPanelIntegration {
         heartbeat = null;
         Object current = service;
         service = null;
-        if (current != null) {
-            tryInvoke(current, "disconnectAddon", plugin);
-        }
+        if (current != null) tryInvoke(current, "disconnectAddon", plugin);
     }
 
     public String status() { return status; }
     public boolean isConnected() { return service != null; }
+
+    public String resolvePlaceholder(Player player, String placeholder) {
+        Object current = service;
+        if (current == null || player == null || placeholder == null) return "";
+        Object value = tryInvoke(current, "resolvePlaceholder", player, placeholder);
+        return value == null ? "" : String.valueOf(value);
+    }
 
     private void attemptConnection() {
         try {
@@ -78,9 +84,11 @@ public final class OmniPanelIntegration {
                 return;
             }
             service = resolved;
-            boolean button = registerButton(loader, resolved);
+            boolean trollButton = registerTrollButton(loader, resolved);
+            boolean rankButton = registerRankVisualsButton(loader, resolved);
             registerDisconnectHandler(resolved);
-            status = "connected api=" + String.valueOf(tryInvoke(resolved, "getApiVersion")) + " button=" + button;
+            status = "connected api=" + String.valueOf(tryInvoke(resolved, "getApiVersion"))
+                    + " trollButton=" + trollButton + " rankButton=" + rankButton;
             plugin.getLogger().info("OmniPanel integration: " + status);
             startHeartbeat();
         } catch (Throwable throwable) {
@@ -114,20 +122,58 @@ public final class OmniPanelIntegration {
                     constructor.setAccessible(true);
                     return constructor.newInstance(
                             "kingfeatures",
-                            "KingFeatures / Troll Lab",
+                            "KingFeatures",
                             plugin.getDescription().getVersion(),
-                            "SMP feature hub: Troll Lab, King's Favor bottles and resource-pack delivery",
+                            "SMP feature hub: rank visuals, Troll Lab, King's Favor bottles and resource-pack delivery",
                             Material.EXPERIENCE_BOTTLE,
                             "kingfeatures.admin",
                             Set.of("main-panel", "addon-lifecycle", "addon-health")
                     );
                 }
             }
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) { }
         return null;
     }
 
-    private boolean registerButton(ClassLoader loader, Object currentService) {
+    private boolean registerTrollButton(ClassLoader loader, Object currentService) {
+        return registerCommandButton(
+                loader, currentService,
+                "kingfeatures_troll_lab", "&d&lTroll Lab", Material.BREWING_STAND,
+                List.of("&7Advanced staff prank controls", "&7Search, target and audit actions", "", "&dClick to open"),
+                "kingfeatures.trolllab",
+                plugin.getConfig().getInt("omnipanel.button-slot", 45),
+                plugin.getConfig().getInt("omnipanel.button-priority", 110),
+                List.of("troll", "lab", "kingfeatures", "prank"),
+                "kingfeatures troll"
+        );
+    }
+
+    private boolean registerRankVisualsButton(ClassLoader loader, Object currentService) {
+        return registerCommandButton(
+                loader, currentService,
+                "kingfeatures_rank_visuals", "&d&lRank Visuals", Material.PAINTING,
+                List.of("&7Configure OmniPanel rank image badges", "&7All rank matching is permission-free", "", "&dClick to configure"),
+                "kingfeatures.admin",
+                plugin.getConfig().getInt("omnipanel.rank-visuals-button-slot", 46),
+                plugin.getConfig().getInt("omnipanel.rank-visuals-button-priority", 115),
+                List.of("rank", "ranks", "visual", "badge", "resource pack", "kingfeatures"),
+                "kingfeatures ranks"
+        );
+    }
+
+    private boolean registerCommandButton(
+            ClassLoader loader,
+            Object currentService,
+            String id,
+            String displayName,
+            Material icon,
+            List<String> lore,
+            String permission,
+            int preferredSlot,
+            int priority,
+            List<String> search,
+            String command
+    ) {
         try {
             Class<?> panelButton = Class.forName("yt.kingez341.omnipanel.OmniPanelService$PanelButton", true, loader);
             Object button = null;
@@ -139,16 +185,7 @@ public final class OmniPanelIntegration {
                         && (p[5] == int.class || p[5] == Integer.class) && (p[6] == int.class || p[6] == Integer.class)
                         && List.class.isAssignableFrom(p[7])) {
                     constructor.setAccessible(true);
-                    button = constructor.newInstance(
-                            "kingfeatures_troll_lab",
-                            "&d&lTroll Lab",
-                            Material.BREWING_STAND,
-                            List.of("&7Advanced staff prank controls", "&7Search, target and audit actions", "", "&dClick to open"),
-                            "kingfeatures.trolllab",
-                            plugin.getConfig().getInt("omnipanel.button-slot", 45),
-                            plugin.getConfig().getInt("omnipanel.button-priority", 110),
-                            List.of("troll", "lab", "kingfeatures", "prank")
-                    );
+                    button = constructor.newInstance(id, displayName, icon, lore, permission, preferredSlot, priority, search);
                     break;
                 }
             }
@@ -157,17 +194,17 @@ public final class OmniPanelIntegration {
             Method detailed = findMethod(currentService.getClass(), "registerMainPanelCommandButtonDetailed", 5, false);
             if (detailed == null) detailed = findMethodOnInterfaces(currentService.getClass(), "registerMainPanelCommandButtonDetailed", 5);
             if (detailed != null) {
-                Object result = invoke(currentService, detailed, plugin, button, "kingfeatures troll", false, true);
+                Object result = invoke(currentService, detailed, plugin, button, command, false, true);
                 return registrationSuccess(result);
             }
             Method legacy = findMethod(currentService.getClass(), "registerMainPanelCommandButton", 4, false);
             if (legacy == null) legacy = findMethodOnInterfaces(currentService.getClass(), "registerMainPanelCommandButton", 4);
             if (legacy != null) {
-                Object result = invoke(currentService, legacy, plugin, button, "kingfeatures troll", false);
+                Object result = invoke(currentService, legacy, plugin, button, command, false);
                 return result instanceof Boolean b ? b : result != null;
             }
         } catch (Throwable throwable) {
-            plugin.getLogger().warning("OmniPanel Troll Lab button registration failed: " + rootMessage(throwable));
+            plugin.getLogger().warning("OmniPanel button '" + id + "' registration failed: " + rootMessage(throwable));
         }
         return false;
     }
@@ -181,7 +218,7 @@ public final class OmniPanelIntegration {
                 service = null;
                 status = "disconnected by OmniPanel";
             });
-        } catch (Throwable ignored) {}
+        } catch (Throwable ignored) { }
     }
 
     private void startHeartbeat() {
@@ -204,7 +241,7 @@ public final class OmniPanelIntegration {
             try {
                 Object value = invokeNoArg(result, method);
                 if (value instanceof Boolean b) return b;
-            } catch (Throwable ignored) {}
+            } catch (Throwable ignored) { }
         }
         return true;
     }
@@ -213,8 +250,8 @@ public final class OmniPanelIntegration {
         if (result == null) return "";
         Object state = null;
         Object message = null;
-        try { state = invokeNoArg(result, "state"); } catch (Throwable ignored) {}
-        try { message = invokeNoArg(result, "message"); } catch (Throwable ignored) {}
+        try { state = invokeNoArg(result, "state"); } catch (Throwable ignored) { }
+        try { message = invokeNoArg(result, "message"); } catch (Throwable ignored) { }
         return " state=" + state + " message=" + message;
     }
 
