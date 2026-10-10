@@ -1,0 +1,50 @@
+name: publish-rank-pack
+
+on:
+  push:
+    branches:
+      - main
+      - feature/v0.1.3-embedded-pack
+    paths:
+      - 'src/main/resources/embedded/KingFeatures-Rank-Pack.part*'
+      - '.github/workflows/publish-rank-pack.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rebuild and verify pack from embedded payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat src/main/resources/embedded/KingFeatures-Rank-Pack.part{00..05} | base64 --decode > /tmp/KingFeatures-Rank-Pack.zip
+          test "$(sha1sum /tmp/KingFeatures-Rank-Pack.zip | awk '{print $1}')" = '6afdaefa9da8fb98c38b481e125c6b9ebce9bf1c'
+          unzip -t /tmp/KingFeatures-Rank-Pack.zip
+
+      - name: Publish stable pack-host branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/kingfeatures-pack-host
+          mkdir -p /tmp/kingfeatures-pack-host
+          cp /tmp/KingFeatures-Rank-Pack.zip /tmp/kingfeatures-pack-host/KingFeatures-Rank-Pack.zip
+          printf '%s\n' '6afdaefa9da8fb98c38b481e125c6b9ebce9bf1c' > /tmp/kingfeatures-pack-host/SHA1.txt
+          printf '%s\n' 'KingFeatures automatic rank resource-pack host. Generated from the pack embedded in the plugin source.' > /tmp/kingfeatures-pack-host/README.txt
+
+          cd /tmp/kingfeatures-pack-host
+          git init
+          git checkout -b pack-host
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add KingFeatures-Rank-Pack.zip SHA1.txt README.txt
+          git commit -m 'Publish KingFeatures rank pack'
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin pack-host
