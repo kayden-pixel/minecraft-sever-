@@ -1,4 +1,4 @@
-# KingFeatures v0.1.2
+# KingFeatures v0.1.3
 # One plugin, modular features. Ultimate Economy Plus remains the money/shop/crate authority.
 
 bottle:
@@ -24,21 +24,19 @@ resource-pack:
   required: true
   send-delay-ticks: 20
   prompt: "&dSkyStrike visuals &7- ranks, icons and KingFeatures assets"
-  mode: AUTO
 
-  # Preferred: if ResourcePackManager is installed, KingFeatures registers its pack there.
+  # ZERO-SETUP DELIVERY:
+  # KingFeatures contains its own rank pack and extracts/verifies it automatically.
+  # Do NOT copy a pack into OmniPanel. Do NOT edit server.properties.
+  # If ResourcePackManager is installed, KingFeatures auto-registers the embedded pack for merging/hosting.
+  # If it is not installed, KingFeatures automatically sends its own built-in hosted pack URL instead.
   resourcepackmanager:
     enabled: true
     reload-after-register: true
 
-  # Direct remote fallback if ResourcePackManager is not installed.
+  # Optional advanced override only. Leave blank for the built-in KingFeatures host.
   remote-url: ""
   remote-sha1: ""
-
-  # Put the supplied KingFeatures rank pack here to make it the preferred pack.
-  local-file: "resourcepack/KingFeatures-Pack.zip"
-  auto-import-omnipanel-rank-pack: true
-  omnipanel-rank-pack-path: "plugins/OmniPanel/rank-pack/Kingez341YT-Rank-Pack-1.21.11.zip"
 
 omnipanel:
   enabled: true
@@ -46,7 +44,7 @@ omnipanel:
   button-priority: 110
   reconnect-seconds: 10
 
-# Automatic, permissionless visual mapping. OmniPanel remains the rank source of truth.
+# Automatic visual mapping. OmniPanel remains the rank source of truth.
 # /kf ranks opens the GUI. Everyone can view it; server operators can change global toggles.
 # No LuckPerms permission nodes/groups are added, changed or removed by this system.
 rank-visuals:
