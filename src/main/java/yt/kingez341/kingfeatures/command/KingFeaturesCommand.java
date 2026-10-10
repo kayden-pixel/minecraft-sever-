@@ -14,6 +14,7 @@ import yt.kingez341.kingfeatures.util.Text;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 public final class KingFeaturesCommand implements CommandExecutor, TabCompleter {
     private final KingFeaturesPlugin plugin;
@@ -33,22 +34,32 @@ public final class KingFeaturesCommand implements CommandExecutor, TabCompleter 
             case "troll", "trolllab" -> {
                 if (!(sender instanceof Player player)) return fail(sender, "Players only.");
                 if (!player.hasPermission("kingfeatures.trolllab")) return fail(sender, "No Troll Lab permission.");
+                if (!plugin.isTrollLabAvailable()) return fail(sender, "Troll Lab failed to start. Run /kf status for the exact error.");
                 plugin.getTrollLab().openTargets(player);
                 return true;
             }
             case "bottle" -> { return bottle(sender, args); }
             case "pack" -> { return pack(sender, args); }
-            case "status" -> {
+            case "status", "diag", "diagnostics" -> {
                 sender.sendMessage(Text.color("&d&lKingFeatures &8• &7v" + plugin.getDescription().getVersion()));
-                sender.sendMessage(Text.color("&7UEP: &f" + plugin.getEconomy().status()));
-                sender.sendMessage(Text.color("&7OmniPanel: &f" + plugin.getOmniPanel().status()));
-                sender.sendMessage(Text.color("&7Pack: &f" + plugin.getPackManager().status()));
+                sender.sendMessage(Text.color("&7Core: &aenabled"));
+                sender.sendMessage(Text.color("&7UEP: &f" + plugin.economyStatus()));
+                sender.sendMessage(Text.color("&7Bottles: &f" + (plugin.isBottleAvailable() ? "ready" : "unavailable")));
+                sender.sendMessage(Text.color("&7Troll Lab: &f" + plugin.trollStatus()));
+                sender.sendMessage(Text.color("&7OmniPanel: &f" + plugin.omniPanelStatus()));
+                sender.sendMessage(Text.color("&7Pack: &f" + plugin.packStatus()));
+                if (!plugin.moduleFailures().isEmpty()) {
+                    sender.sendMessage(Text.color("&cStartup failures:"));
+                    for (Map.Entry<String, String> entry : plugin.moduleFailures().entrySet()) {
+                        sender.sendMessage(Text.color("&8- &c" + entry.getKey() + "&7: &f" + entry.getValue()));
+                    }
+                }
                 return true;
             }
             case "reload" -> {
                 if (!sender.hasPermission("kingfeatures.admin")) return fail(sender, "No permission.");
                 plugin.reloadKingFeatures();
-                sender.sendMessage(Text.color("&aKingFeatures reloaded."));
+                sender.sendMessage(Text.color("&aKingFeatures reload completed. Run &f/kf status &ato verify every module."));
                 return true;
             }
             default -> {
@@ -59,6 +70,7 @@ public final class KingFeaturesCommand implements CommandExecutor, TabCompleter 
     }
 
     private boolean bottle(CommandSender sender, String[] args) {
+        if (!plugin.isBottleAvailable()) return fail(sender, "Bottle module failed to start. Run /kf status.");
         if (args.length < 2) {
             sender.sendMessage(Text.color("&e/kf bottle buy &7- buy a King's Favor bottle"));
             sender.sendMessage(Text.color("&e/kf bottle template [amount] &7- crate/shop-safe template"));
@@ -100,15 +112,16 @@ public final class KingFeaturesCommand implements CommandExecutor, TabCompleter 
 
     private boolean pack(CommandSender sender, String[] args) {
         if (!sender.hasPermission("kingfeatures.admin")) return fail(sender, "No permission.");
+        if (!plugin.isPackAvailable()) return fail(sender, "Resource-pack module failed to start. Run /kf status.");
         if (args.length < 2 || args[1].equalsIgnoreCase("status")) {
-            sender.sendMessage(Text.color("&dPack: &f" + plugin.getPackManager().status()));
+            sender.sendMessage(Text.color("&dPack: &f" + plugin.packStatus()));
             return true;
         }
         if (args[1].equalsIgnoreCase("resend")) {
             Player target = args.length >= 3 ? Bukkit.getPlayerExact(args[2]) : (sender instanceof Player p ? p : null);
             if (target == null) return fail(sender, "Player not found.");
             plugin.getPackManager().send(target);
-            sender.sendMessage(Text.color("&aResource pack request sent to " + target.getName() + "."));
+            sender.sendMessage(Text.color("&aPack refresh requested for " + target.getName() + "."));
             return true;
         }
         return fail(sender, "Usage: /kf pack <status|resend [player]>");
@@ -118,7 +131,7 @@ public final class KingFeaturesCommand implements CommandExecutor, TabCompleter 
         sender.sendMessage(Text.color("&d&lKingFeatures &8• &fSMP Feature Hub"));
         sender.sendMessage(Text.color("&d/kf troll &7- open Troll Lab"));
         sender.sendMessage(Text.color("&d/kf bottle buy &7- buy King's Favor (&6255&7)"));
-        sender.sendMessage(Text.color("&d/kf status &7- integration health"));
+        sender.sendMessage(Text.color("&d/kf status &7- integration/startup diagnostics"));
         if (sender.hasPermission("kingfeatures.admin")) sender.sendMessage(Text.color("&d/kf pack &7| &d/kf reload"));
     }
 
