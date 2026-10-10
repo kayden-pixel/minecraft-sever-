@@ -1,4 +1,4 @@
-# KingFeatures v0.1.1
+# KingFeatures v0.1.2
 # One plugin, modular features. Ultimate Economy Plus remains the money/shop/crate authority.
 
 bottle:
@@ -27,7 +27,6 @@ resource-pack:
   mode: AUTO
 
   # Preferred: if ResourcePackManager is installed, KingFeatures registers its pack there.
-  # RSPM merges/hosts the pack and can fall back to remote hosting when the server's HTTP port is unreachable.
   resourcepackmanager:
     enabled: true
     reload-after-register: true
@@ -36,19 +35,37 @@ resource-pack:
   remote-url: ""
   remote-sha1: ""
 
-  # Local pack discovery order.
+  # Put the supplied KingFeatures rank pack here to make it the preferred pack.
   local-file: "resourcepack/KingFeatures-Pack.zip"
   auto-import-omnipanel-rank-pack: true
   omnipanel-rank-pack-path: "plugins/OmniPanel/rank-pack/Kingez341YT-Rank-Pack-1.21.11.zip"
-
-  # The old built-in port-8124 self-host path was removed in v0.1.1 because managed hosts
-  # commonly block arbitrary ports. Use ResourcePackManager or remote-url instead.
 
 omnipanel:
   enabled: true
   button-slot: 45
   button-priority: 110
   reconnect-seconds: 10
+
+# Automatic, permissionless visual mapping. OmniPanel remains the rank source of truth.
+# /kf ranks opens the GUI. Everyone can view it; server operators can change global toggles.
+# No LuckPerms permission nodes/groups are added, changed or removed by this system.
+rank-visuals:
+  enabled: true
+  refresh-ticks: 100
+  ranks:
+    owner: true
+    co_owner: true
+    ceo: true
+    manager: true
+    admin: true
+    builder: true
+    developer: true
+    moderator: true
+    helper: true
+    mvp: true
+    vip: true
+    youtuber: true
+    member: true
 
 troll-lab:
   enabled: true
