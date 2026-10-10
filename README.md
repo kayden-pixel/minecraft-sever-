@@ -1,54 +1,88 @@
 # KingFeatures
 
-KingFeatures is a modular Paper SMP feature hub for SkyStrike. **Troll Lab** is the first major module, not the entire plugin.
+KingFeatures is a modular Paper SMP feature hub for SkyStrike. v0.2.0 adds a permission-free **OmniPanel Rank Visuals** system using the supplied pixel-art rank badges.
 
-## Current v0.1.0 modules
+## OmniPanel Rank Visuals
 
-### Troll Lab
-- OmniPanel main-panel integration through the installed OmniPanel API (no shaded OmniPanel classes).
+KingFeatures does not create, grant or infer rank permissions. **OmniPanel remains the rank authority.** KingFeatures connects through the installed OmniPanel API and asks for `%omnipanel_primary_rank_plain%` (falling back to `%omnipanel_rank_plain%`), then renders the matching image badge.
+
+Included badge artwork:
+- Owner
+- Co-Owner
+- CEO
+- Manager
+- Admin
+- Builder
+- Developer
+- Moderator
+- Helper
+- MVP
+- VIP
+- YouTuber
+- Member/default
+
+All 13 are enabled by default. `/kf ranks` opens a 54-slot settings GUI where the existing KingFeatures administrator can:
+- enable/disable each rank visual independently;
+- enable/disable all rank visuals;
+- toggle Player List/TAB rendering;
+- toggle Paper display/chat-name rendering;
+- enable/disable all ranks at once;
+- request a resource-pack refresh.
+
+There are **no new permission nodes for rank matching**. A player gets a badge because OmniPanel reports that rank, not because KingFeatures checks LuckPerms itself.
+
+### Rank resource pack
+The supplied artwork is bundled inside the KingFeatures JAR. On startup KingFeatures reconstructs and validates:
+
+```text
+plugins/KingFeatures/resourcepack/KingFeatures-Rank-Visuals.zip
+```
+
+The pack uses the isolated font namespace `kingfeatures:ranks` and private glyphs so it does not overwrite Minecraft's default font or another plugin's custom glyphs.
+
+Preferred delivery is through **ResourcePackManager**. KingFeatures registers its local pack through ResourcePackManager's installed API so it can be merged with packs from other plugins instead of replacing them. If ResourcePackManager is unavailable, `resource-pack.remote-url` remains the direct remote fallback.
+
+## Troll Lab
+- OmniPanel main-panel integration through the installed OmniPanel API.
 - 54-slot animated target/action browser.
-- Paper Dialog API search input (`DialogInput.text`) on the 1.21.11 baseline.
-- Safe prank actions: harmless lightning, launch, spin, creeper scare, darkness, freeze, fake death, hotbar shuffle, sound burst, ghost hit, fake diamonds and view flip.
-- Every executed troll is written to `plugins/KingFeatures/audit.log` with actor, target and action.
-- `/kf troll` fallback works even if OmniPanel is absent.
+- Paper Dialog API search input on the 1.21.11 baseline.
+- Safe prank actions including harmless lightning, launch, spin, creeper scare, darkness, freeze, fake death, hotbar shuffle, sound burst, ghost hit, fake diamonds and view flip.
+- Executed trolls are written to `plugins/KingFeatures/audit.log`.
 
-### King's Favor Bottle
-Default interpretation of the requested timings:
+## King's Favor Bottle
 - UEP price: **255**.
-- A directly purchased bottle must be redeemed within **5 hours**.
-- Drinking it grants **Hero of the Village for 24 hours**.
-- Price, redeem window, effect duration, amplifier and CustomModelData are configurable.
-- Item identity is stored in Bukkit/Paper PersistentDataContainer, not in the display name/lore.
+- Direct-purchase redeem window: **5 hours**.
+- Drinking grants **Hero of the Village for 24 hours**.
+- Price, redeem window, duration, amplifier and CustomModelData are configurable.
+- Identity is stored with PDC, not only display name/lore.
+- `/kf bottle template` creates an untimed crate/shop ItemStack template.
 
-`/kf bottle template` creates an **untimed template** intended for Ultimate Economy Plus crates or Visual Shop. UEP can persist the exact ItemStack/PDC metadata. `/kf bottle buy` creates a timed direct-purchase bottle and withdraws through the installed UEP API.
-
-### Ultimate Economy Plus integration
-KingFeatures does **not** own a second balance, shop, Auction House or crate system.
-- Connects to `kingez341yt.plugin.api.UltimateEconomyServices` from the installed UEP plugin classloader.
+## Ultimate Economy Plus integration
+KingFeatures does not create a second economy.
+- Connects to the installed Ultimate Economy Plus API/classloader.
 - Withdraws/refunds through UEP for `/kf bottle buy`.
 - Crate/Visual-Shop integration uses exact signed ItemStacks.
-- Recommended UEP flow: run `/kf bottle template`, hold the item, then use UEP Item Control -> **Add Held Item To Shop**, or place that exact template into Crate Studio.
 
-### Resource-pack delivery
-KingFeatures can send the resource pack itself; no `server.properties` resource-pack entry is required.
+## Resource-pack delivery
+Resolution order in v0.2.0:
+1. bundled `KingFeatures-Rank-Visuals.zip`;
+2. configured local pack path;
+3. legacy OmniPanel rank-pack fallback;
+4. configured remote URL for direct delivery when appropriate.
 
-Resolution order:
-1. `resource-pack.remote-url` if configured.
-2. `plugins/KingFeatures/resourcepack/KingFeatures-Pack.zip`.
-3. Existing OmniPanel rank pack at `plugins/OmniPanel/rank-pack/Kingez341YT-Rank-Pack-1.21.11.zip`.
+When ResourcePackManager is installed it is preferred for local-pack merge/hosting/distribution.
 
-For local packs, KingFeatures can start a tiny HTTP server and derives the hostname the player used to join. It computes a real SHA-1 and sends the pack with a stable UUID, so clients can cache it.
+## Compatibility
+CI verifies:
+- Paper **1.21.11** / Java 21 compile;
+- exact Paper **26.2 build 129** / Java 25 compile;
+- Paper **26.3** / Java 25 compile;
+- a real Paper 26.2 build 129 boot test that verifies KingFeatures stays enabled and reconstructs the bundled rank pack byte-for-byte.
 
-> Hosting note: many Minecraft hosts block arbitrary extra ports. If port `8124` is not publicly reachable, set `resource-pack.remote-url` to an HTTPS-hosted pack (GitHub Pages/CDN/object storage works well). The plugin still owns sending, required/optional state, hash and status tracking.
-
-## Compatibility target
-- Source/bytecode baseline: **Java 21 / Paper 1.21.11**.
-- Paper 26.1+ servers use Java 25; Java 21 plugin bytecode runs forward on Java 25.
-- Target range: Paper **1.21.11 through 26.3**.
-- New UI is built on Paper's Dialog API already present by 1.21.11, avoiding a 26.3-only hard dependency.
-- OmniPanel and UEP are optional runtime integrations and are resolved from the installed plugins' classloaders to avoid optional-dependency linkage failures.
+The deployable JAR uses the Java 21 / Paper 1.21.11 baseline so it can run forward on supported Java 25 servers.
 
 ## Commands
+- `/kf ranks` — configure OmniPanel rank visuals
 - `/kf troll`
 - `/kf bottle buy`
 - `/kf bottle template [amount]`
@@ -58,32 +92,23 @@ For local packs, KingFeatures can start a tiny HTTP server and derives the hostn
 - `/kf status`
 - `/kf reload`
 
-## Permissions
-- `kingfeatures.admin`
+## Existing permissions
+v0.2.0 adds **no new permission nodes**.
+- `kingfeatures.admin` — existing KingFeatures administration, also used to open the settings GUI
 - `kingfeatures.trolllab`
 - `kingfeatures.bottle.buy`
 - `kingfeatures.bottle.give`
 
-## Building
-The project includes a GitHub Actions build. Locally with Gradle 8.x:
-
-```bash
-gradle clean build
-```
-
-Output:
-
-```text
-build/libs/KingFeatures-0.1.0.jar
-```
+These permissions do not decide which rank image a player receives. Rank visuals come from OmniPanel's API result.
 
 ## Installation
-1. Fully stop Paper. Do not `/reload` or use PlugMan for integration testing.
-2. Install `KingFeatures-0.1.0.jar`.
-3. Keep your normal current OmniPanel and Ultimate Economy Plus JARs installed if you want those integrations.
-4. Start the server.
-5. Run `/kf status`.
-6. Test `/kf troll`, `/kf bottle template`, `/kf bottle buy`, and one resource-pack join.
+1. Fully stop Paper; do not use `/reload` or PlugMan for the upgrade.
+2. Remove the old KingFeatures JAR so there is only one copy.
+3. Install `KingFeatures-0.2.0.jar`.
+4. Keep OmniPanel installed for rank detection.
+5. Keep ResourcePackManager installed if you want automatic pack merging/hosting with other plugin packs.
+6. Start the server.
+7. Run `/kf status` and `/kf ranks`.
 
-## Resource-pack art hook
-`bottle.custom-model-data` defaults to `341255`. Once the KingFeatures bottle art is added to your pack, bind the item model to that value. Until then, the bottle remains fully functional with the vanilla potion appearance while the existing rank glyphs/images continue to work from the rank pack.
+## Startup isolation
+UEP, resource-pack delivery, Troll Lab, OmniPanel and Rank Visuals are isolated startup modules. If an optional integration fails, KingFeatures remains enabled and `/kf status` reports the failing module instead of disabling the entire plugin.
