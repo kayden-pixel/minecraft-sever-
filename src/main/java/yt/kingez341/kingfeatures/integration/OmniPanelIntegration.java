@@ -2,6 +2,7 @@ package yt.kingez341.kingfeatures.integration;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 import yt.kingez341.kingfeatures.KingFeaturesPlugin;
@@ -51,6 +52,14 @@ public final class OmniPanelIntegration {
 
     public String status() { return status; }
     public boolean isConnected() { return service != null; }
+
+    /** Read a value from OmniPanel's public placeholder API without linking against OmniPanel classes. */
+    public String resolvePlaceholder(Player player, String key) {
+        Object current = service;
+        if (current == null || player == null || key == null) return null;
+        Object value = tryInvoke(current, "resolvePlaceholder", player, key);
+        return value == null ? null : String.valueOf(value);
+    }
 
     private void attemptConnection() {
         try {
